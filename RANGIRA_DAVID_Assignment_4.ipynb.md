@@ -1,6 +1,6 @@
 # Assignment 4 — Rule-Based Chatbot for the Campus Library
 
-**Student:** IHIMBAZWE DIVINSE  
+**Student:** RANGIRA DAVID
 **Course:** Chatbots Development (AITCD001)  
 **Week:** 4  
 **Assignment:** 4 — Rule-Based Chatbot for the Campus Library

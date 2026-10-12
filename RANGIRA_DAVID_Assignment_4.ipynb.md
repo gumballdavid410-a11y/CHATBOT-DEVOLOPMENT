@@ -1,9 +1,9 @@
-# Assignment 4 — Rule-Based Chatbot for the Campus Library
+# Assignment 4 â€” Rule-Based Chatbot for the Campus Library
 
 **Student:** RANGIRA DAVID  
 **Course:** Chatbots Development (AITCD001)  
 **Week:** 4  
-**Assignment:** 4 — Rule-Based Chatbot for the Campus Library
+**Assignment:** 4 â€” Rule-Based Chatbot for the Campus Library
 
 ## Overview
 
@@ -11,7 +11,7 @@ This project implements the supplied campus-library rule-based chatbot. The work
 
 No new domain intents were designed. The implementation follows the specification supplied in the assignment.
 
-## Part A — Pattern ordering
+## Part A â€” Pattern ordering
 
 The rules are checked in this order:
 
@@ -49,11 +49,11 @@ Examples include:
 - `do you sell coffee`
 - `what is the wifi password`
 
-## Part B — Booking flow
+## Part B â€” Booking flow
 
 The study-room flow collects three values one at a time.
 
-### Step 1 — Day
+### Step 1 â€” Day
 
 Question:
 
@@ -63,7 +63,7 @@ Only `mon`, `tue`, `wed`, `thu`, `fri`, or `sat` are accepted.
 
 An unrecognized answer does not advance the flow; the day question is re-asked.
 
-### Step 2 — Time
+### Step 2 â€” Time
 
 Question:
 
@@ -73,7 +73,7 @@ Only `morning`, `afternoon`, or `evening` are accepted.
 
 An unrecognized answer does not advance the flow.
 
-### Step 3 — Number of people
+### Step 3 â€” Number of people
 
 Question:
 
@@ -104,7 +104,7 @@ The booking is only treated as confirmed after `yes` or `y`.
 
 This prevents a later conversation from inheriting an old booking.
 
-## Part C — Testing
+## Part C â€” Testing
 
 The notebook runs the test set and prints the result produced by the code. The first eighteen cases are the required sample phrasings. Additional cases check capitalization, robustness, an unknown time/number, a misspelling, and the three supplied out-of-scope requests.
 
@@ -142,9 +142,4 @@ This is a deliberately simple rule-based chatbot.
 - The number of people must be entered as a digit from 1 to 8.
 - Out-of-scope requests are sent to the fallback rather than answered.
 
-## Files
 
-The Week 4 directory contains:
-
-- `IHIMBAZWE_DIVINSE_Assignment_4.ipynb` — completed notebook
-- `README.md` — project documentation

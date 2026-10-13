@@ -1,61 +1,434 @@
-# Part A: Router, handlers, fines, and greeting
-
-def handle_greeting(message, memory=None):
-    return "Hello! Welcome to the campus library chatbot. How can I help you today?"
-
-
-def handle_hours(message, memory=None):
-    return "The library opening hours are listed in the library information."
-
-
-def handle_borrow(message, memory=None):
-    return "You can borrow books using your student library account. Please check the borrowing rules for loan periods."
-
-
-def handle_renew(message, memory=None):
-    return "You can renew eligible borrowed books through your library account."
-
-
-def handle_fines(message, memory=None):
-    import re
-
-    match = re.search(r"(\d+)\s*days?", message.lower())
-
-    if not match:
-        return "How many days overdue is the book?"
-
-    days_overdue = int(match.group(1))
-    daily_rate = 500
-    fine = days_overdue * daily_rate
-
-    return f"Your fine for {days_overdue} overdue day(s) is {fine} RWF."
-
-
-def handle_rooms(message, memory=None):
-    return "I can help you book a study room. What date and time would you like?"
-
-
-def handle_printing(message, memory=None):
-    return "You can use the campus library printing service. Please check the available printing options."
-
-
-# Connect each intent to its handler
-HANDLERS = {
-    "greeting": handle_greeting,
-    "hours": handle_hours,
-    "borrow": handle_borrow,
-    "renew": handle_renew,
-    "fines": handle_fines,
-    "rooms": handle_rooms,
-    "printing": handle_printing,
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Assignment 5 â€” Campus Library Chatbot\n",
+    "**Student:** Rangira Rurangwa David  \n",
+    "**Course:** Chatbots Development (AITCD001)  \n",
+    "**Week:** 5\n",
+    "\n",
+    "## Overview\n",
+    "This notebook upgrades the Assignment 4 campus library chatbot with:\n",
+    "- A router that connects intents to handler functions.\n",
+    "- A greeting intent and an overdue-fines calculation.\n",
+    "- Handling more than one request in a single message.\n",
+    "- Conversation memory for a user's name and follow-up questions.\n",
+    "- A study-room booking flow that can answer a side question without losing booking progress.\n",
+    "- Eight test conversations, including two documented failures/limitations.\n",
+    "\n",
+    "Run the notebook from top to bottom. The chatbot is rule-based and uses simple keyword/pattern matching; it is not connected to a real library booking system."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Section 1 â€” Imports and intent patterns\n",
+    "The patterns below follow the library topics from Assignment 4. Room booking is checked before borrowing to avoid confusing â€œbook a study roomâ€ with borrowing a book."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import re\n",
+    "\n",
+    "RULES = [\n",
+    "    (\"greeting\", r\"\\b(hello|hi|hey|good morning|good afternoon|good evening)\\b\"),\n",
+    "    (\"rooms\", r\"\\b(book a study room|study room booking|reserve a room|study room)\\b\"),\n",
+    "    (\"hours\", r\"\\b(opening hours|what time do you open|are you open|opening time|close)\\b\"),\n",
+    "    (\"borrow\", r\"\\b(borrow|borrowing limit|how many books|loan period|keep a book)\\b\"),\n",
+    "    (\"renew\", r\"\\b(renew|renewal|extend my book|extend my loan)\\b\"),\n",
+    "    (\"fines\", r\"\\b(fine|fines|overdue|late charge|overdue charges)\\b\"),\n",
+    "    (\"printing\", r\"\\b(printing|print|photocopy|per page)\\b\"),\n",
+    "]\n",
+    "\n",
+    "RESPONSES = {\n",
+    "    \"hours\": \"The library is open 08:00â€“20:00 Monday to Friday, 09:00â€“13:00 on Saturday, and closed on Sunday.\",\n",
+    "    \"borrow\": \"You may borrow up to 4 books at a time for 14 days.\",\n",
+    "    \"renew\": \"A loan can be renewed twice online unless another reader has reserved the book.\",\n",
+    "    \"printing\": \"Printing costs 50 RWF per black-and-white page and 200 RWF per colour page.\",\n",
+    "}\n",
+    "\n",
+    "FALLBACK = (\n",
+    "    \"Sorry, I can help with greetings, opening hours, borrowing, renewals, \"\n",
+    "    \"overdue fines, study-room booking, and printing or photocopying.\"\n",
+    ")\n",
+    "\n",
+    "def detect_intents(message):\n",
+    "    \"\"\"Return every intent whose pattern appears in the message.\"\"\"\n",
+    "    text = message.lower().strip()\n",
+    "    found = []\n",
+    "    for intent, pattern in RULES:\n",
+    "        if re.search(pattern, text):\n",
+    "            found.append(intent)\n",
+    "    return found\n",
+    "\n",
+    "def detect_intent(message):\n",
+    "    \"\"\"Compatibility helper: return the first detected intent or None.\"\"\"\n",
+    "    intents = detect_intents(message)\n",
+    "    return intents[0] if intents else None"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Part A â€” Router, handlers, greeting, and fines (35 points)\n",
+    "Each handler accepts a message and optional memory. The fines handler extracts the number of overdue days and calculates 200 RWF per day, capped at 5,000 RWF. If the number of days is missing, it asks a follow-up question."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def handle_greeting(message, memory=None):\n",
+    "    memory = memory if memory is not None else {}\n",
+    "    name = memory.get(\"name\")\n",
+    "    if name:\n",
+    "        return f\"Hello again, {name}! How can I help you with the library today?\"\n",
+    "    return \"Hello! Welcome to the campus library chatbot. How can I help you today?\"\n",
+    "\n",
+    "def handle_hours(message, memory=None):\n",
+    "    return RESPONSES[\"hours\"]\n",
+    "\n",
+    "def handle_borrow(message, memory=None):\n",
+    "    return RESPONSES[\"borrow\"]\n",
+    "\n",
+    "def handle_renew(message, memory=None):\n",
+    "    return RESPONSES[\"renew\"]\n",
+    "\n",
+    "def handle_printing(message, memory=None):\n",
+    "    return RESPONSES[\"printing\"]\n",
+    "\n",
+    "def handle_fines(message, memory=None):\n",
+    "    text = message.lower()\n",
+    "    match = re.search(r\"\\b(\\d+)\\s*(?:overdue\\s*)?days?\\b\", text)\n",
+    "    if not match:\n",
+    "        return \"How many days overdue is the book?\"\n",
+    "    days = int(match.group(1))\n",
+    "    daily_rate = 200\n",
+    "    fine = min(days * daily_rate, 5000)\n",
+    "    return f\"For {days} overdue day(s), the fine is {fine} RWF (200 RWF per day, capped at 5,000 RWF).\"\n",
+    "\n",
+    "def handle_rooms(message, memory=None):\n",
+    "    return \"Let's book a study room. Tell me the day (mon, tue, wed, thu, fri, sat).\"\n",
+    "\n",
+    "HANDLERS = {\n",
+    "    \"greeting\": handle_greeting,\n",
+    "    \"hours\": handle_hours,\n",
+    "    \"borrow\": handle_borrow,\n",
+    "    \"renew\": handle_renew,\n",
+    "    \"fines\": handle_fines,\n",
+    "    \"rooms\": handle_rooms,\n",
+    "    \"printing\": handle_printing,\n",
+    "}\n",
+    "\n",
+    "def route_message(intent, message, memory=None):\n",
+    "    handler = HANDLERS.get(intent)\n",
+    "    if handler is None:\n",
+    "        return FALLBACK\n",
+    "    return handler(message, memory)\n",
+    "\n",
+    "# Quick Part A checks\n",
+    "print(route_message(\"greeting\", \"hello\", {}))\n",
+    "print(route_message(\"fines\", \"My book is 3 days overdue\", {}))\n",
+    "print(route_message(\"fines\", \"My book is overdue\", {}))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Part B â€” Several requests in one message (25 points)\n",
+    "The router detects multiple intents in the same message and returns one response for each detected intent. This is a simple rule-based approach: it only recognizes requests covered by the patterns."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def respond_to_message(message, memory=None):\n",
+    "    memory = memory if memory is not None else {}\n",
+    "    text = message.strip()\n",
+    "\n",
+    "    # Remember a name when the user says \"my name is ...\"\n",
+    "    name_match = re.search(r\"\\bmy name is ([A-Za-z][A-Za-z '\\-]{0,40})\", text, re.I)\n",
+    "    if name_match:\n",
+    "        memory[\"name\"] = name_match.group(1).strip().title()\n",
+    "\n",
+    "    intents = detect_intents(text)\n",
+    "    if not intents:\n",
+    "        # A small follow-up rule for the current remembered context.\n",
+    "        if memory.get(\"pending\") == \"fine_days\" and re.fullmatch(r\"\\s*\\d+\\s*\", text):\n",
+    "            days = int(text)\n",
+    "            memory.pop(\"pending\", None)\n",
+    "            return handle_fines(f\"{days} days overdue\", memory)\n",
+    "        return FALLBACK\n",
+    "\n",
+    "    replies = []\n",
+    "    for intent in intents:\n",
+    "        if intent == \"fines\":\n",
+    "            reply = handle_fines(text, memory)\n",
+    "            if \"How many days\" in reply:\n",
+    "                memory[\"pending\"] = \"fine_days\"\n",
+    "            replies.append(reply)\n",
+    "        elif intent == \"rooms\":\n",
+    "            memory[\"booking_step\"] = \"day\"\n",
+    "            replies.append(\"Let's book a study room. Which day? Enter mon, tue, wed, thu, fri, or sat.\")\n",
+    "        else:\n",
+    "            replies.append(route_message(intent, text, memory))\n",
+    "\n",
+    "    # Keep a greeting/name acknowledgement if the user introduced themselves.\n",
+    "    if name_match and \"greeting\" not in intents:\n",
+    "        replies.insert(0, f\"Nice to meet you, {memory['name']}.\")\n",
+    "\n",
+    "    return \"\\n\".join(replies)\n",
+    "\n",
+    "memory = {}\n",
+    "print(respond_to_message(\"Hello, my name is David. What time do you open?\", memory))\n",
+    "print(\"\\nAnother example:\")\n",
+    "print(respond_to_message(\"What is the borrowing limit and how much is printing per page?\", memory))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Part C â€” Memory across turns (25 points)\n",
+    "Memory is a dictionary shared between messages. It stores the user's name, pending follow-up questions, and the current study-room booking details. During a booking, a side question is answered while the booking step remains saved."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "VALID_DAYS = {\"mon\", \"tue\", \"wed\", \"thu\", \"fri\", \"sat\"}\n",
+    "VALID_TIMES = {\"morning\", \"afternoon\", \"evening\"}\n",
+    "\n",
+    "def start_booking(memory):\n",
+    "    memory[\"booking\"] = {\"step\": \"day\", \"day\": None, \"time\": None, \"people\": None}\n",
+    "    return \"Let's book a study room. Which day? (mon/tue/wed/thu/fri/sat)\"\n",
+    "\n",
+    "def booking_turn(message, memory):\n",
+    "    \"\"\"Process one booking answer, preserving state if a side question is asked.\"\"\"\n",
+    "    booking = memory.get(\"booking\")\n",
+    "    if not booking:\n",
+    "        return start_booking(memory)\n",
+    "\n",
+    "    text = message.strip().lower()\n",
+    "    if text == \"bye\":\n",
+    "        memory.pop(\"booking\", None)\n",
+    "        return \"Booking cancelled.\"\n",
+    "\n",
+    "    # Side questions are answered without losing booking progress.\n",
+    "    side_intents = detect_intents(text)\n",
+    "    if side_intents and booking[\"step\"] in {\"day\", \"time\", \"people\", \"confirm\"}:\n",
+    "        non_room = [i for i in side_intents if i != \"rooms\"]\n",
+    "        if non_room:\n",
+    "            answers = [route_message(i, message, memory) for i in non_room]\n",
+    "            answers.append(f\"We can continue the booking. Current step: {booking['step']}.\")\n",
+    "            return \"\\n\".join(answers)\n",
+    "\n",
+    "    if booking[\"step\"] == \"day\":\n",
+    "        if text not in VALID_DAYS:\n",
+    "            return \"Please enter a valid day: mon, tue, wed, thu, fri, or sat.\"\n",
+    "        booking[\"day\"] = text\n",
+    "        booking[\"step\"] = \"time\"\n",
+    "        return \"What time? Enter morning, afternoon, or evening.\"\n",
+    "\n",
+    "    if booking[\"step\"] == \"time\":\n",
+    "        if text not in VALID_TIMES:\n",
+    "            return \"Please enter morning, afternoon, or evening.\"\n",
+    "        booking[\"time\"] = text\n",
+    "        booking[\"step\"] = \"people\"\n",
+    "        return \"How many people? Enter a number from 1 to 8.\"\n",
+    "\n",
+    "    if booking[\"step\"] == \"people\":\n",
+    "        if not re.fullmatch(r\"[1-8]\", text):\n",
+    "            return \"Please enter a number from 1 to 8.\"\n",
+    "        booking[\"people\"] = int(text)\n",
+    "        booking[\"step\"] = \"confirm\"\n",
+    "        return f\"A room on {booking['day']}, {booking['time']}, for {booking['people']} people. Is that correct? (yes/no)\"\n",
+    "\n",
+    "    if booking[\"step\"] == \"confirm\":\n",
+    "        if text == \"yes\":\n",
+    "            summary = f\"Booking confirmed: {booking['day']}, {booking['time']}, {booking['people']} people.\"\n",
+    "            memory.pop(\"booking\", None)\n",
+    "            return summary\n",
+    "        if text == \"no\":\n",
+    "            memory.pop(\"booking\", None)\n",
+    "            return \"Booking not confirmed. Start again if you want another room.\"\n",
+    "        return \"Please answer yes or no.\"\n",
+    "\n",
+    "    return \"I lost track of the booking. Please start again.\"\n",
+    "\n",
+    "# Demonstrate name memory and a follow-up across turns.\n",
+    "demo_memory = {}\n",
+    "print(respond_to_message(\"Hi, my name is David\", demo_memory))\n",
+    "print(respond_to_message(\"hello\", demo_memory))\n",
+    "print(respond_to_message(\"How much is the fine?\", demo_memory))\n",
+    "print(respond_to_message(\"4\", demo_memory))\n",
+    "\n",
+    "# Demonstrate side question during booking.\n",
+    "booking_memory = {}\n",
+    "print(\"\\n\" + start_booking(booking_memory))\n",
+    "print(booking_turn(\"tue\", booking_memory))\n",
+    "print(booking_turn(\"what are the opening hours?\", booking_memory))\n",
+    "print(booking_turn(\"afternoon\", booking_memory))\n",
+    "print(booking_turn(\"3\", booking_memory))\n",
+    "print(booking_turn(\"yes\", booking_memory))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Part D â€” Eight test conversations, written answers, and README notes (15 points)\n",
+    "The following tests exercise the main features. Two tests are deliberately recorded as failures/limitations for discussion, as requested by the assignment brief. These are not hidden: the output shows the actual result and explains the limitation."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def run_test_conversation(label, messages, expected_check, explanation=\"\"):\n",
+    "    memory = {}\n",
+    "    outputs = []\n",
+    "    for message in messages:\n",
+    "        # Route booking replies through the booking state machine when active.\n",
+    "        if memory.get(\"booking\"):\n",
+    "            output = booking_turn(message, memory)\n",
+    "        elif message.lower().strip() in VALID_DAYS | VALID_TIMES or re.fullmatch(r\"\\s*[1-8]\\s*\", message):\n",
+    "            output = respond_to_message(message, memory)\n",
+    "        else:\n",
+    "            output = respond_to_message(message, memory)\n",
+    "        outputs.append(output)\n",
+    "    passed = expected_check(outputs, memory)\n",
+    "    print(f\"{'PASS' if passed else 'FAIL'} â€” {label}\")\n",
+    "    for user_message, bot_output in zip(messages, outputs):\n",
+    "        print(f\"  User: {user_message}\")\n",
+    "        print(f\"  Bot:  {bot_output}\")\n",
+    "    if explanation:\n",
+    "        print(\"  Explanation:\", explanation)\n",
+    "    print()\n",
+    "    return passed\n",
+    "\n",
+    "test_results = []\n",
+    "\n",
+    "# 1. Greeting\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Greeting\",\n",
+    "    [\"hello\"],\n",
+    "    lambda out, mem: \"Hello!\" in out[0]\n",
+    "))\n",
+    "\n",
+    "# 2. Name remembered\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Name memory\",\n",
+    "    [\"My name is David\", \"hello\"],\n",
+    "    lambda out, mem: mem.get(\"name\") == \"David\" and \"David\" in out[1]\n",
+    "))\n",
+    "\n",
+    "# 3. Fine calculation\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Fine calculation\",\n",
+    "    [\"My book is 3 days overdue\"],\n",
+    "    lambda out, mem: \"600 RWF\" in out[0]\n",
+    "))\n",
+    "\n",
+    "# 4. Multiple requests\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Two requests in one message\",\n",
+    "    [\"What are the opening hours and what is the borrowing limit?\"],\n",
+    "    lambda out, mem: \"08:00\" in out[0] and \"4 books\" in out[0]\n",
+    "))\n",
+    "\n",
+    "# 5. Booking with side question\n",
+    "def test_booking_side_question():\n",
+    "    mem = {}\n",
+    "    outputs = [start_booking(mem)]\n",
+    "    outputs.append(booking_turn(\"tue\", mem))\n",
+    "    outputs.append(booking_turn(\"what are the opening hours?\", mem))\n",
+    "    outputs.append(booking_turn(\"afternoon\", mem))\n",
+    "    outputs.append(booking_turn(\"3\", mem))\n",
+    "    outputs.append(booking_turn(\"yes\", mem))\n",
+    "    passed = \"Current step: time.\" in outputs[2] and \"Booking confirmed\" in outputs[-1]\n",
+    "    print(f\"{'PASS' if passed else 'FAIL'} â€” Booking side question\")\n",
+    "    for item in outputs:\n",
+    "        print(\"  \" + item.replace(\"\\n\", \" | \"))\n",
+    "    print()\n",
+    "    return passed\n",
+    "test_results.append(test_booking_side_question())\n",
+    "\n",
+    "# 6. Fine follow-up\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Fine follow-up\",\n",
+    "    [\"How much is the fine?\", \"4\"],\n",
+    "    lambda out, mem: \"How many days\" in out[0] and \"800 RWF\" in out[1]\n",
+    "))\n",
+    "\n",
+    "# 7. Documented limitation: the router does not infer a fine-day count written as a word.\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Known limitation â€” number written as a word\",\n",
+    "    [\"My book is three days overdue\"],\n",
+    "    lambda out, mem: \"600 RWF\" in out[0],\n",
+    "    \"FAIL is expected: the current fine handler extracts digits, not number words such as 'three'.\"\n",
+    "))\n",
+    "\n",
+    "# 8. Documented limitation: indirect follow-up is not understood unless it is just a number.\n",
+    "test_results.append(run_test_conversation(\n",
+    "    \"Known limitation â€” indirect follow-up\",\n",
+    "    [\"How much is the fine?\", \"It was four days\"],\n",
+    "    lambda out, mem: \"800 RWF\" in out[1],\n",
+    "    \"FAIL is expected: the follow-up handler accepts a bare number only, not a full sentence.\"\n",
+    "))\n",
+    "\n",
+    "print(f\"Summary: {sum(test_results)}/8 passed ({sum(test_results)/8*100:.1f}%).\")\n",
+    "print(\"The two known limitations are recorded for analysis, as required by the assignment brief.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Written answers and reflection\n",
+    "\n",
+    "1. **What does the router do?** It looks up an intent in `HANDLERS` and calls the corresponding function. Unknown intents receive a fallback response.\n",
+    "2. **How are multiple requests handled?** `detect_intents()` returns all matching intents, and `respond_to_message()` joins the corresponding answers.\n",
+    "3. **What is stored in memory?** The user's name, a pending fine follow-up, and the current study-room booking step and answers.\n",
+    "4. **How does the bot handle a side question during booking?** It answers a recognized library question and leaves the booking dictionary intact so the user can continue.\n",
+    "5. **Why do two tests fail?** The fine handler recognizes numeric digits but not number words; the follow-up logic recognizes a bare number but not a sentence such as â€œIt was four days.â€ These are limitations to improve in a future version.\n",
+    "6. **What are the limitations?** Intent detection relies on fixed patterns, booking is simulated rather than connected to a real reservation system, and memory exists only while the Python session is running.\n",
+    "\n",
+    "## Conclusion\n",
+    "This notebook demonstrates handler-based routing, multiple intent responses, and dictionary-based memory. The eight conversations provide evidence of successful behaviour and clearly document two known failures."
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.x"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
 }
-
-
-# Router function
-def route_message(intent, message, memory=None):
-    handler = HANDLERS.get(intent)
-
-    if handler is None:
-        return "Sorry, I don't understand that request yet."
-
-    return handler(message, memory)
